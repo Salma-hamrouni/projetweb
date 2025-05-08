@@ -52,11 +52,21 @@ Route::middleware(['auth'])->group(function () {
 
 Route::get('/map', [MapController::class, 'index'])->name('map.index');
 
-Route::get('/mindmap', [MindmapController::class, 'index'])->name('mindmap.index');
+// Route GET pour afficher le formulaire de recherche
+Route::get('/mindmap/search', [MindmapController::class, 'searchForm'])->name('mindmap.search');
+
+// Redirection si quelqu’un tente un GET sur /mindmap/generate
+Route::get('/mindmap/generate', function () {
+    return redirect()->route('mindmap.search');
+});
+
+// Route POST pour générer la mindmap
+Route::post('/mindmap/generate', [MindmapController::class, 'generate'])->name('mindmap.generate');
+
+
 Route::get('/objectifs-partages', [DashboardController::class, 'showSharedObjectifs'])->name('shared_objectifs');
 
-// Dans routes/web.php
-Route::get('/ask', [MindmapController::class, 'ask']);
+
 
 Route::get('/calendrier', [CalendarController::class, 'index'])->name('calendrier.index');
 

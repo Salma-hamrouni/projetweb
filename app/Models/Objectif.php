@@ -27,9 +27,10 @@ class Objectif extends Model
     }
 
     public function etapes()
-    {
-        return $this->hasMany(Etape::class);  
-    }
+{
+    return $this->hasMany(Etape::class);
+}
+
 
     public function progressions()
     {

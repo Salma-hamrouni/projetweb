@@ -61,23 +61,6 @@
             @enderror
         </div>
 
-        <div class="form-group mt-3">
-    <label for="shared_with_user_id">Partager avec un autre utilisateur :</label>
-    <select name="shared_with_user_id" class="form-control">
-        <option value="">-- Ne pas partager --</option>
-        @foreach($users as $user)
-            <option value="{{ $user->id }}" {{ isset($objectif) && $objectif->shared_with_user_id == $user->id ? 'selected' : '' }}>
-                {{ $user->name }} ({{ $user->email }})
-            </option>
-        @endforeach
-    </select>
-</div>
-<!-- Dans create.blade.php et edit.blade.php -->
-<div class="form-group">
-    <label for="file">Fichier (facultatif)</label>
-    <input type="file" name="file" id="file" class="form-control">
-</div>
-
 
         <!-- Lieu avec carte interactive -->
         <div class="mb-3">
@@ -138,14 +121,18 @@
 </div>
 @endsection
 
+
 @section('scripts')
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const lat = parseFloat(document.getElementById('latitude').value) || 36.8065;
-        const lng = parseFloat(document.getElementById('longitude').value) || 10.1815;
+        const latInput = document.getElementById('latitude');
+        const lngInput = document.getElementById('longitude');
+
+        const lat = parseFloat(latInput.value) || 36.8065;
+        const lng = parseFloat(lngInput.value) || 10.1815;
 
         const map = L.map('map').setView([lat, lng], 13);
         let marker = L.marker([lat, lng], { draggable: true }).addTo(map);
@@ -156,13 +143,13 @@
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        marker.on('dragend', function (e) {
+        marker.on('dragend', function () {
             const position = marker.getLatLng();
             const newLat = position.lat.toFixed(5);
             const newLng = position.lng.toFixed(5);
 
-            document.getElementById('latitude').value = newLat;
-            document.getElementById('longitude').value = newLng;
+            latInput.value = newLat;
+            lngInput.value = newLng;
             document.getElementById('lieu').value = `Lat: ${newLat}, Lng: ${newLng}`;
         });
 
@@ -171,37 +158,37 @@
             const newLng = e.latlng.lng.toFixed(5);
 
             marker.setLatLng(e.latlng);
-            document.getElementById('latitude').value = newLat;
-            document.getElementById('longitude').value = newLng;
+            latInput.value = newLat;
+            lngInput.value = newLng;
             document.getElementById('lieu').value = `Lat: ${newLat}, Lng: ${newLng}`;
         });
 
-        // Mise à jour dynamique de la barre de progression
-        const totalSteps = {{ count($objectif->etapes) }};
-        let completedSteps = {{ count($objectif->etapes->where('status', 'termine')) }};
+        // Progression
+        const totalSteps = {{ count($objectif->etapes ?? []) }};
+        const completedSteps = {{ $objectif->etapes ? $objectif->etapes->where('status', 'termine')->count() : 0 }};
         const progressBar = document.getElementById('progress-bar');
 
-        const progress = (completedSteps / totalSteps) * 100;
+        const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
         progressBar.style.width = `${progress}%`;
+        progressBar.setAttribute('aria-valuenow', Math.round(progress));
 
-        // Ajout d'étapes avec effet
-        let etapeIndex = {{ count($objectif->etapes) }};
+        // Ajout dynamique des étapes
+        let etapeIndex = {{ count($objectif->etapes ?? []) }};
         document.getElementById('add-etape').addEventListener('click', function () {
             const container = document.getElementById('etapes-container');
             const newEtape = document.createElement('div');
             newEtape.classList.add('card', 'mb-2', 'p-3', 'etape-item');
-            newEtape.classList.add('slide-up'); // Animation créative
-            newEtape.innerHTML = ` 
+            newEtape.innerHTML = `
                 <div class="mb-2">
-                    <label>Titre</label>
+                    <label class="form-label">Titre</label>
                     <input type="text" name="etapes[${etapeIndex}][titre]" class="form-control" required>
                 </div>
                 <div class="mb-2">
-                    <label>Description</label>
+                    <label class="form-label">Description</label>
                     <textarea name="etapes[${etapeIndex}][description]" class="form-control" rows="2" required></textarea>
                 </div>
                 <div class="mb-2">
-                    <label>Statut</label>
+                    <label class="form-label">Statut</label>
                     <select name="etapes[${etapeIndex}][status]" class="form-select" required>
                         <option value="en_cours">En cours</option>
                         <option value="termine">Terminé</option>
@@ -212,11 +199,15 @@
             `;
             container.appendChild(newEtape);
             etapeIndex++;
+        });
 
-            newEtape.querySelector('.remove-etape').addEventListener('click', function () {
-                newEtape.remove();
-            });
+        // Suppression d’une étape
+        document.addEventListener('click', function (e) {
+            if (e.target.classList.contains('remove-etape')) {
+                e.target.closest('.etape-item').remove();
+            }
         });
     });
 </script>
 @endsection
+

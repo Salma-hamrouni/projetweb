@@ -1,257 +1,252 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Objectif;
 use App\Models\Etape;
-use App\Models\User;
+use App\Models\Journal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use App\Models\User;
 
 class ObjectifController extends Controller
 {
-    /**
-     * Afficher la liste des objectifs de l'utilisateur.
-     *
-     * @return \Illuminate\View\View
-     */
     public function index()
     {
-        // Récupérer tous les objectifs de l'utilisateur connecté
         $objectifs = Objectif::with('etapes')
             ->where('user_id', auth()->id())
             ->orderByDesc('created_at')
             ->paginate(10);
 
-        // Statistiques sur les objectifs
         $stats = (object) [
             'total' => $objectifs->total(),
             'completed' => $objectifs->getCollection()->filter(fn($o) => $o->status === 'termine')->count()
         ];
 
-        // Retourner la vue avec la liste des objectifs et les statistiques
         return view('objectifs.index', compact('objectifs', 'stats'));
     }
 
-    /**
-     * Afficher le formulaire de création d'un objectif.
-     *
-     * @return \Illuminate\View\View
-     */
     public function create()
     {
-        // Récupérer les utilisateurs à qui l'objectif peut être partagé
         $users = User::where('id', '!=', auth()->id())->get();
-
-        // Retourner la vue avec la liste des utilisateurs
         return view('objectifs.create', compact('users'));
     }
 
-    /**
-     * Enregistrer un nouvel objectif dans la base de données.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\RedirectResponse
-     */
     public function store(Request $request)
     {
-        // Validation des données envoyées par le formulaire
+        // Validation des données envoyées
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'status' => 'required|in:en_cours,termine,abandonne',
             'lieu' => 'nullable|string|max:255',
-            'latitude' => 'nullable|numeric|between:-90,90'?? null,
-            'longitude' => 'nullable|numeric|between:-180,180'?? null,
-            'deadline' => 'nullable|date',
-            'file' => 'nullable|file|mimes:jpeg,png,jpg,pdf,docx|max:2048',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'deadline' => 'nullable|date|after_or_equal:today',
             'shared_with_user_id' => 'nullable|exists:users,id',
+            'file' => 'nullable|file|mimes:jpg,jpeg,png,pdf,docx|max:2048', // Nouvelle règle pour le fichier
             'etapes' => 'required|array|min:1',
             'etapes.*.titre' => 'required|string|max:255',
-            'etapes.*.status' => 'required|in:en_cours,termine,abandonne',
             'etapes.*.description' => 'nullable|string',
+            'etapes.*.status' => 'nullable|in:en_cours,termine,abandonne',
         ]);
 
-        // Début de la transaction pour assurer la consistance des données
-        DB::beginTransaction();
-        try {
-            // Créer l'objectif
+        // Démarrer la transaction pour garantir la cohérence des données
+        DB::transaction(function () use ($validated, $request) {  // Ajoutez $request ici
+            // Gérer le téléchargement du fichier si nécessaire
+            $filePath = null;
+            if ($request->hasFile('file')) {
+                $filePath = $request->file('file')->store('uploads', 'public');
+            }
+
+            // Création de l'objectif
             $objectif = Objectif::create([
+                'user_id' => auth()->id(),
                 'title' => $validated['title'],
-                'description' => $validated['description'],
+                'description' => $validated['description'] ?? null,
                 'status' => $validated['status'],
                 'lieu' => $validated['lieu'],
                 'latitude' => $validated['latitude'],
                 'longitude' => $validated['longitude'],
                 'deadline' => $validated['deadline'],
-                'user_id' => auth()->id(),
                 'shared_with_user_id' => $validated['shared_with_user_id'],
-                // Sauvegarder le fichier si présent
-                'file_path' => $request->file('file') ? $request->file('file')->store('uploads') : null
+                'file_path' => $filePath, // Sauvegarde du chemin du fichier
+                'completed_at' => $validated['status'] === 'termine' ? now() : null,
             ]);
 
-            // Ajouter les étapes à l'objectif
-            foreach ($validated['etapes'] as $etapeData) {
-                Etape::create([
-                    'objectif_id' => $objectif->id,
-                    'titre' => $etapeData['titre'],
-                    'description' => $etapeData['description'] ?? null,
-                    'status' => $etapeData['status']
-                ]);
+            // Si l'objectif est abandonné, le supprimer immédiatement
+            if ($validated['status'] === 'abandonne') {
+                $this->logJournal('Abandon', "Objectif abandonné dès la création : {$validated['title']}", $objectif->id);
+                $objectif->delete();
+                return;
             }
 
-            // Commit de la transaction si tout est réussi
-            DB::commit();
+            $this->logJournal('Création', "Nouvel objectif : {$validated['title']}", $objectif->id);
 
-            // Rediriger vers la liste des objectifs avec un message de succès
-            return redirect()->route('objectifs.index')->with('success', 'Objectif créé avec succès.');
-        } catch (\Exception $e) {
-            // Rollback en cas d'erreur
-            DB::rollBack();
+            // Création des étapes associées à l'objectif
+            foreach ($validated['etapes'] as $etape) {
+                $objectif->etapes()->create([
+                    'titre' => $etape['titre'],
+                    'description' => $etape['description'] ?? null,
+                    'status' => $etape['status'] ?? 'en_cours',
+                    'user_id' => auth()->id(),
+                ]);
+            }
+        });
 
-            // Retourner à la page précédente avec un message d'erreur
-            return back()->withErrors(['error' => 'Erreur lors de la création de l\'objectif.']);
-        }
+        // Redirection vers la liste des objectifs avec un message de succès
+        return redirect()->route('objectifs.index')->with('success', 'Objectif créé avec succès !');
     }
 
-    /**
-     * Afficher les détails d'un objectif spécifique.
-     *
-     * @param int $id
-     * @return \Illuminate\View\View
-     */
-    public function show($id)
-    {
-        // Récupérer l'objectif avec ses étapes
-        $objectif = Objectif::with('etapes')->findOrFail($id);
-
-        // Vérifier si l'utilisateur est autorisé à voir cet objectif
-        if ($objectif->user_id !== auth()->id()) {
-            return redirect()->route('objectifs.index')->withErrors(['error' => 'Accès non autorisé.']);
-        }
-
-        // Retourner la vue avec les détails de l'objectif
-        return view('objectifs.show', compact('objectif'));
-    }
-
-    /**
-     * Afficher le formulaire d'édition d'un objectif.
-     *
-     * @param int $id
-     * @return \Illuminate\View\View
-     */
     public function edit($id)
     {
-        // Récupérer l'objectif à éditer
         $objectif = Objectif::with('etapes')->findOrFail($id);
-
-        // Vérifier si l'utilisateur est autorisé à éditer cet objectif
-        if ($objectif->user_id !== auth()->id()) {
-            return redirect()->route('objectifs.index')->withErrors(['error' => 'Accès non autorisé.']);
-        }
-
-        // Récupérer les utilisateurs à qui l'objectif peut être partagé
+        $this->authorizeUser($objectif);
         $users = User::where('id', '!=', auth()->id())->get();
-
-        // Retourner la vue avec l'objectif à éditer et la liste des utilisateurs
         return view('objectifs.edit', compact('objectif', 'users'));
     }
 
-    /**
-     * Mettre à jour un objectif dans la base de données.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @param int $id
-     * @return \Illuminate\Http\RedirectResponse
-     */
     public function update(Request $request, $id)
     {
-        // Validation des données envoyées par le formulaire
+        $objectif = Objectif::with('etapes')->findOrFail($id);
+        $this->authorizeUser($objectif);
+        $objectif->shared_with_user_id = $request->shared_with_user_id;
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'status' => 'required|in:en_cours,termine,abandonne',
-           
-            'deadline' => 'nullable|date',
-            'file' => 'nullable|file|mimes:jpeg,png,jpg,pdf,docx|max:2048',
-            'shared_with_user_id' => 'nullable|exists:users,id',
+            'lieu' => 'nullable|string|max:255',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'deadline' => 'nullable|date|after_or_equal:today',
+            'file' => 'nullable|file|mimes:jpg,jpeg,png,pdf,docx|max:2048', // Validation du fichier
             'etapes' => 'required|array|min:1',
+            'etapes.*.id' => 'nullable|exists:etapes,id',
             'etapes.*.titre' => 'required|string|max:255',
-            'etapes.*.status' => 'required|in:en_cours,termine,abandonne',
             'etapes.*.description' => 'nullable|string',
+            'etapes.*.status' => 'nullable|in:en_cours,termine,abandonne',
         ]);
 
-        // Récupérer l'objectif à mettre à jour
-        $objectif = Objectif::findOrFail($id);
-
-        // Vérifier si l'utilisateur est autorisé à éditer cet objectif
-        if ($objectif->user_id !== auth()->id()) {
-            return redirect()->route('objectifs.index')->withErrors(['error' => 'Accès non autorisé.']);
-        }
-
-        // Début de la transaction pour assurer la consistance des données
-        DB::beginTransaction();
-        try {
-            // Mettre à jour les informations de l'objectif
-            $objectif->update([
-                'title' => $validated['title'],
-                'description' => $validated['description'] ?? null,
-                'status' => $validated['status'],
-                'lieu' => $validated['lieu'] ?? null,
-                'latitude' => $validated['latitude'] ?? null,
-                'longitude' => $validated['longitude'] ?? null,
-                'deadline' => $validated['deadline'] ?? null,
-                'shared_with_user_id' => $validated['shared_with_user_id'] ?? null,
-                'file_path' => $request->file('file') ? $request->file('file')->store('uploads') : $objectif->file_path
-            ]);
-            
-            // Supprimer les anciennes étapes
-            $objectif->etapes()->delete();
-
-            // Ajouter les nouvelles étapes
-            foreach ($validated['etapes'] as $etapeData) {
-                Etape::create([
-                    'objectif_id' => $objectif->id,
-                    'titre' => $etapeData['titre'],
-                    'description' => $etapeData['description'] ?? null,
-                    'status' => $etapeData['status']
-                ]);
+        DB::transaction(function () use ($objectif, $validated, $request) {
+            // Gérer le téléchargement du fichier si nécessaire
+            $filePath = $objectif->file_path; // Par défaut, conserver le chemin actuel
+            if ($request->hasFile('file')) {
+                // Si un nouveau fichier est téléchargé, remplacer le précédent
+                $filePath = $request->file('file')->store('uploads', 'public');
             }
 
-            // Commit de la transaction si tout est réussi
-            DB::commit();
+            $validated['completed_at'] = $validated['status'] === 'termine' ? now() : null;
+            $validated['file_path'] = $filePath; // Mettre à jour le chemin du fichier
 
-            // Rediriger vers la liste des objectifs avec un message de succès
-            return redirect()->route('objectifs.index')->with('success', 'Objectif mis à jour avec succès.');
-        } catch (\Exception $e) {
-            // Rollback en cas d'erreur
-            DB::rollBack();
+            // Mise à jour de l'objectif
+            $objectif->update($validated);
 
-            // Retourner à la page précédente avec un message d'erreur
-            return back()->withErrors(['error' => 'Erreur lors de la mise à jour de l\'objectif.']);
+            // Gérer les étapes soumises
+            $submittedEtapes = collect($validated['etapes']);
+            $submittedIds = $submittedEtapes->pluck('id')->filter()->toArray();
+
+            // Supprimer les étapes non soumises
+            $objectif->etapes()->whereNotIn('id', $submittedIds)->delete();
+
+            // Mettre à jour ou créer les étapes
+            foreach ($submittedEtapes as $etapeData) {
+                if (!empty($etapeData['id'])) {
+                    $etape = Etape::find($etapeData['id']);
+                    if ($etape && $etape->objectif_id === $objectif->id) {
+                        $etape->update([
+                            'titre' => $etapeData['titre'],
+                            'description' => $etapeData['description'] ?? null,
+                            'status' => $etapeData['status'] ?? 'en_cours',
+                        ]);
+                    }
+                } else {
+                    $objectif->etapes()->create([
+                        'titre' => $etapeData['titre'],
+                        'description' => $etapeData['description'] ?? null,
+                        'status' => $etapeData['status'] ?? 'en_cours',
+                        'user_id' => auth()->id(),
+                    ]);
+                }
+            }
+
+            $this->logJournal('Mise à jour', "Objectif mis à jour : {$objectif->title}", $objectif->id);
+        });
+
+        return redirect()->route('objectifs.index')->with('success', 'Objectif mis à jour avec succès.');
+    }
+
+    public function destroy(Objectif $objectif)
+    {
+        $this->authorizeUser($objectif);
+
+        DB::transaction(function () use ($objectif) {
+            $this->logJournal('Suppression', "Objectif supprimé : {$objectif->title}", $objectif->id);
+            $objectif->delete();
+        });
+
+        return redirect()->route('objectifs.index')->with('success', 'Objectif supprimé.');
+    }
+
+    public function show($id)
+    {
+        $objectif = Objectif::with('etapes')->findOrFail($id);
+        $this->authorizeUser($objectif);
+
+        return view('objectifs.show', compact('objectif'));
+    }
+
+    public function progressions($id)
+    {
+        $objectif = Objectif::with('etapes')->findOrFail($id);
+        $this->authorizeUser($objectif);
+
+        $progression = $this->calculateObjectifProgression($objectif);
+
+        return view('progressions.index', compact('objectif', 'progression'));
+    }
+
+    public function apiIndex()
+    {
+        return Objectif::where('user_id', auth()->id())
+            ->select(['id', 'title', 'status', 'created_at'])
+            ->orderBy('status')
+            ->orderByDesc('created_at')
+            ->get();
+    }
+
+    private function calculateObjectifProgression(Objectif $objectif): float
+    {
+        $total = $objectif->etapes->count();
+        if ($total === 0) {
+            return 0;
+        }
+
+        $completed = $objectif->etapes->where('status', 'termine')->count();
+
+        return round(($completed / $total) * 100, 2);
+    }
+
+    protected function logJournal(string $action, string $description, ?int $objectifId = null): void
+    {
+        Journal::create([
+            'user_id' => auth()->id(),
+            'action' => $action,
+            'description' => $description,
+            'objectif_id' => $objectifId,
+        ]);
+    }
+
+    protected function authorizeUser(Objectif $objectif): void
+    {
+        if ($objectif->user_id !== auth()->id()) {
+            abort(403, 'Accès refusé.');
         }
     }
 
-    /**
-     * Supprimer un objectif de la base de données.
-     *
-     * @param int $id
-     * @return \Illuminate\Http\RedirectResponse
-     */
-    public function destroy($id)
+    public function objectifsPartages()
     {
-        // Récupérer l'objectif à supprimer
-        $objectif = Objectif::findOrFail($id);
-
-        // Vérifier si l'utilisateur est autorisé à supprimer cet objectif
-        if ($objectif->user_id !== auth()->id()) {
-            return redirect()->route('objectifs.index')->withErrors(['error' => 'Accès non autorisé.']);
-        }
-
-        // Supprimer l'objectif et ses étapes associées
-        $objectif->delete();
-
-        // Retourner à la liste des objectifs avec un message de succès
-        return redirect()->route('objectifs.index')->with('success', 'Objectif supprimé avec succès.');
+        $sharedObjectifs = auth()->user()->objectifsPartagesAvecMoi;
+        return view('share.objectifs_partages', compact('sharedObjectifs'));
     }
 }

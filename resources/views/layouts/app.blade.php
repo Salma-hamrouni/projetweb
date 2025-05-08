@@ -50,7 +50,7 @@
                         <li class="nav-item"><a class="nav-link" href="{{ route('dashboard') }}">📊 Tableau de bord</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ route('objectifs.index') }}">🎯 Objectifs</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ route('progressions.index')}}">📈 Progressions</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ route('mindmap.index') }}">🧠 Mindmap</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ route('mindmap.search') }}">🧠 Mindmap</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ route('timeline.index') }}">🕒 Timeline</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ route('profile.show') }}">👤 Profil</a></li>
                         <li class="nav-item">

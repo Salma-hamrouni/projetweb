@@ -17,7 +17,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'photo', // Ajoutez la photo ici
+        'photo', 
     ];
 
 
@@ -30,19 +30,14 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-    // Relations
-  // Dans le modèle User
+
 public function objectifs()
 {
     return $this->hasMany(Objectif::class);
 }
 
 
-    public function progressions()
-    {
-        return $this->hasMany(Progression::class);
-    }
- // Ajoute cette méthode dans la classe User
+ 
 public function etapes()
 {
     return $this->hasMany(Etape::class);
@@ -52,6 +47,10 @@ public function etapes()
 public function journals()
 {
     return $this->hasMany(Journal::class);
+}
+public function objectifsPartagesAvecMoi()
+{
+    return $this->hasMany(Objectif::class, 'shared_with_user_id');
 }
 
 }

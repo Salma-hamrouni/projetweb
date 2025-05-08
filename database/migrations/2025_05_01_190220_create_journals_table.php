@@ -19,8 +19,7 @@ class CreateJournalsTable extends Migration
              $table->foreignId('user_id')->constrained()->onDelete('cascade');
              $table->string('action');
              $table->text('description');
-             $table->string('object_type');
-             $table->integer('object_id');
+             $table->integer('objectif_id');
              $table->timestamps();
          });
      }

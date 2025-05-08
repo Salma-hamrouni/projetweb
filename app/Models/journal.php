@@ -12,9 +12,8 @@ class Journal extends Model
     protected $fillable = [
         'user_id',
         'action',    
-        'description', 
-        'object_type', 
-        'object_id',  
+        'description',  
+        'objectif_id',
     ];
 
     public function user()

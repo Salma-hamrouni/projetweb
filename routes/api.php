@@ -23,6 +23,9 @@ Route::delete('data/{id}', [DataApiController::class, 'destroy']);
 Route::get('journals', [JournalApiController::class, 'index']);
 Route::get('journals/{id}', [JournalApiController::class, 'show']);
 
+// Dans routes/api.php
+
+
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();

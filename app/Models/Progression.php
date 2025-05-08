@@ -21,9 +21,8 @@ class Progression extends Model
         return $this->belongsTo(User::class);
     }
 
-    // Accesseur pour le statut
     public function getStatutAttribute()
     {
-        return $this->pourcentage >= 100 ? 'terminee' : 'en_cours';
+        return $this->pourcentage >= 100 ? 'termine' : 'en_cours';
     }
 }

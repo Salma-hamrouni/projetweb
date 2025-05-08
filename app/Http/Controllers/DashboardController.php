@@ -1,35 +1,30 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Objectif;
 use App\Models\Etape;
+use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        // Vérifier si l'utilisateur est authentifié
-        $user = auth()->user();
+        $user = Auth::user();
     
-        // Si l'utilisateur n'est pas authentifié, rediriger vers la page de connexion
         if (!$user) {
             return redirect()->route('login')->with('error', 'Vous devez vous connecter pour accéder à votre tableau de bord.');
         }
     
-        // Récupérer les comptages des objectifs, progressions et étapes pour l'utilisateur authentifié
         $objectifsCount = $user->objectifs()->count();
         $etapesCount = $user->etapes()->count();
     
-        // Calculer la moyenne de progression des objectifs
-        $objectifs = $user->objectifs; // Récupérer les objectifs de l'utilisateur
+        $objectifs = $user->objectifs; 
         if ($objectifs->isEmpty()) {
-            $averageProgression = 0; // Si aucun objectif, la moyenne est 0
+            $averageProgression = 0; 
         } else {
             $totalProgression = 0;
 
-            // Calculer la progression de chaque objectif en fonction de son status
             foreach ($objectifs as $objectif) {
                 switch ($objectif->status) {
                     case 'terminee':
@@ -50,8 +45,22 @@ class DashboardController extends Controller
             // Moyenne de la progression
             $averageProgression = $totalProgression / $objectifsCount;
         }
-    
-        // Passer les données à la vue
-        return view('dashboard', compact('objectifsCount', 'averageProgression', 'etapesCount'));
+
+        $objectifsPartagesAvecMoi = $user->objectifsPartagesAvecMoi; // Objectifs partagés avec l'utilisateur
+
+        return view('dashboard', compact('objectifsCount', 'averageProgression', 'etapesCount', 'objectifsPartagesAvecMoi'));
     }
+    public function showSharedObjectifs()
+    {
+        $user = auth()->user();
+    
+        $objectifsPartagesAvecMoi = $user->objectifsPartagesAvecMoi;
+    
+        if (!$objectifsPartagesAvecMoi || $objectifsPartagesAvecMoi->isEmpty()) {
+            return view('share.objectifs_partages', ['objectifsPartagesAvecMoi' => collect()]);
+        }
+    
+        return view('share.objectifs_partages', compact('objectifsPartagesAvecMoi'));
+    }
+    
 }

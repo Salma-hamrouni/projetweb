@@ -9,13 +9,12 @@ return new class extends Migration
     public function up()
     {
         Schema::table('etapes', function (Blueprint $table) {
-            // Vérifie si la colonne 'user_id' existe avant de l'ajouter
             if (!Schema::hasColumn('etapes', 'user_id')) {
-                $table->unsignedBigInteger('user_id');
-                $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+                $table->unsignedBigInteger('user_id')->after('objectif_id');
             }
         });
     }
+    
 
     public function down()
     {

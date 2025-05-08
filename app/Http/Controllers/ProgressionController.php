@@ -1,52 +1,48 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Objectif;
-use Illuminate\Support\Facades\Auth;
 
 class ProgressionController extends Controller
 {
     public function index()
     {
-        // Vérifie si l'utilisateur est authentifié
-        if (!Auth::check()) {
-            return redirect()->route('login');  // Redirige si l'utilisateur n'est pas connecté
+        $user = auth()->user();
+
+        if (!$user) {
+            return redirect()->route('login');
         }
 
-        // Récupère l'utilisateur authentifié
-        $user = Auth::user();
-        
-        // Récupère les objectifs de l'utilisateur authentifié
-        $objectifs = Objectif::where('user_id', $user->id)->get();
+        // Charger les objectifs de l'utilisateur avec leurs étapes
+        $objectifs = $user->objectifs()->with('etapes')->get();
 
-        // Si aucun objectif n'est trouvé
-        if ($objectifs->isEmpty()) {
-            $chartData = []; // Tableau vide si pas d'objectifs
-        } else {
-            // Prépare les données pour le graphique
-            $chartData = $objectifs->map(function ($objectif) {
-                // Calcul de la progression en fonction du status
-                $progress = 0;
+        // Préparer la liste des progressions
+        $progressions = $objectifs->map(function ($objectif) {
+            return [
+                'objectif' => $objectif,
+                'progression' => $objectif->progression, // propriété dynamique dans le modèle
+            ];
+        });
 
-                switch ($objectif->status) {
-                    case 'termine':
-                        $progress = 100;
-                        break;
-                    case 'en_cours':
-                        $progress = 50;  // Exemple: tu peux ajuster cela selon la logique que tu souhaites
-                        break;
-                        
-                }
+        return view('progressions.index', compact('progressions'));
+    }
+    public function calculateProgression(Objectif $objectif)
+    {
+        // Calcul de la progression de l'objectif
+        $totalEtapes = $objectif->etapes->count();
+        $etapesTerminees = $objectif->etapes->where('termine', true)->count();
 
-                return [
-                    'name' => $objectif->title,  // Le titre de l'objectif
-                    'progress' => $progress,     // La progression calculée
-                ];
-            })->toArray(); // Convertit la Collection en tableau
-        }
+        // Calcul du pourcentage
+        $progression = $totalEtapes > 0 ? round(($etapesTerminees / $totalEtapes) * 100) : 0;
 
-        // Retourne la vue avec les données de progression
-        return view('progressions.index', compact('chartData'));
+        // Définir la classe de fond en fonction de la progression
+        $bgClass = $progression == 100 ? 'bg-completed' :
+                  ($progression >= 80 ? 'bg-boost' :
+                  ($progression >= 50 ? 'bg-growth' : 'bg-start'));
+
+        // Retourne les données de progression et de classe de fond
+        return compact('progression', 'bgClass');
     }
 }

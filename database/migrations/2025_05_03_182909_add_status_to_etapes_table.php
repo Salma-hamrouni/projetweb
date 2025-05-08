@@ -15,7 +15,7 @@ class AddStatusToEtapesTable extends Migration
     public function up()
 {
     Schema::table('etapes', function (Blueprint $table) {
-        $table->enum('status', ['en_attente', 'en_cours', 'terminee'])->default('en_attente');
+        $table->enum('status', ['en_cours', 'termine', 'abondonee'])->default('en_cours');
     });
 }
 

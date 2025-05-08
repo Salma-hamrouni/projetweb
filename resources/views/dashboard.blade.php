@@ -31,12 +31,15 @@
                     </div>
                 </div>
             </div>
+            
         </div>
+<!-- Lien vers la carte -->
+<div class="mt-4 text-center">
+    <a class="btn btn-outline-primary me-2" href="{{ route('map.index') }}">🗺️ Voir la carte interactive</a>
+    <a class="btn btn-outline-success" href="{{ route('calendrier.index') }}">📅 Voir le calendrier</a>
+</div>
 
-        <!-- Lien vers la carte -->
-        <div class="mt-4 text-center">
-            <a class="btn btn-outline-primary" href="{{ route('map.index') }}">🗺️ Voir la carte interactive</a>
-        </div>
+        
 
    
 @endsection

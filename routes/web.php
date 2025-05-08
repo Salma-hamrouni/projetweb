@@ -3,11 +3,13 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ObjectifController;
 use App\Http\Controllers\EtapeController;
-use App\Http\Controllers\ProgressionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ProgressionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\MapController;
 use App\Http\Controllers\MindmapController;
+use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\TimelineController;
 
 // Page d'accueil
 Route::get('/', function () {
@@ -38,16 +40,11 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/etapes/{etape}', [EtapeController::class, 'update'])->name('etapes.update');
     Route::delete('/etapes/{etape}', [EtapeController::class, 'destroy'])->name('etapes.destroy');
 
-    // Progressions
     Route::get('/progressions', [ProgressionController::class, 'index'])->name('progressions.index');
-    Route::get('/progressions/create', [ProgressionController::class, 'create'])->name('progressions.create');
-    Route::post('/progressions', [ProgressionController::class, 'store'])->name('progressions.store');
-    Route::get('/progressions/{progression}', [ProgressionController::class, 'show'])->name('progressions.show');
-    Route::get('/progressions/{progression}/edit', [ProgressionController::class, 'edit'])->name('progressions.edit');
-    Route::put('/progressions/{progression}', [ProgressionController::class, 'update'])->name('progressions.update');
-    Route::delete('/progressions/{progression}', [ProgressionController::class, 'destroy'])->name('progressions.destroy');
-   
-    Route::get('/profile', [ProfileController::class, 'index'])->name('profile.index');
+
+    Route::get('/timeline', [TimelineController::class, 'index'])->name('timeline.index');
+
+    Route::get('/profile/index', [ProfileController::class, 'index'])->name('profile.index');
     Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
@@ -55,7 +52,17 @@ Route::middleware(['auth'])->group(function () {
 
 Route::get('/map', [MapController::class, 'index'])->name('map.index');
 
-Route::get('/MindMap', [MindmapController::class, 'index'])->name('MindMap.index');
+Route::get('/mindmap', [MindmapController::class, 'index'])->name('mindmap.index');
+Route::get('/objectifs-partages', [DashboardController::class, 'showSharedObjectifs'])->name('shared_objectifs');
+
+// Dans routes/web.php
+Route::get('/ask', [MindmapController::class, 'ask']);
+
+Route::get('/calendrier', [CalendarController::class, 'index'])->name('calendrier.index');
+
+
+
+
  
 });
 

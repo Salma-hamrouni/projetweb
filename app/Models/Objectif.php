@@ -9,62 +9,43 @@ class Objectif extends Model
 {
     use HasFactory;
 
-    // Attributs par défaut
-    protected $attributes = [
-        'completed_at' => null,
-    ];
-
-    // Champs remplissables
     protected $fillable = [
-        'title',
-        'description',
-        'date_limite',
-        'user_id',
-        'completed_at',
-        'lien',
-        'latitude',
-        'longitude',
-        'status', // ✅ Ajouter le champ status ici
+        'title', 'description', 'deadline', 'user_id',
+        'completed_at', 'lien', 'latitude', 'longitude', 'status', 'file_path'
+    ]; 
+
+    protected $casts = [
+        'deadline' => 'datetime',  
+        'completed_at' => 'datetime', 
+        'latitude' => 'float',  
+        'longitude' => 'float',  
     ];
 
-    // Relations
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class);  
     }
 
     public function etapes()
     {
-        return $this->hasMany(Etape::class);
-    }
-
-    public function location()
-    {
-        return $this->belongsTo(Location::class);
-    }
-
-    public function data()
-    {
-        return $this->hasMany(Data::class);
+        return $this->hasMany(Etape::class);  
     }
 
     public function progressions()
     {
-        return $this->hasMany(Progression::class);
+        return $this->hasMany(Progression::class);  
     }
-    private function calculateObjectifProgression(Objectif $objectif)
-{
-    $totalSteps = $objectif->etapes->count();
+
+    public function getProgressionAttribute()
+    {
+        $total = $this->etapes->count();  
+        $terminees = $this->etapes->where('status', 'termine')->count();  
+        return $total > 0 ? round(($terminees / $total) * 100, 2) : 0;  
+    }
+    public function sharedWithUser()
+    {
+        return $this->belongsTo(User::class, 'shared_with_user_id');
+    }
     
-    if ($totalSteps === 0) {
-        return 0;
-    }
-
-    $completedSteps = $objectif->etapes->filter(function($etape) {
-        return $etape->progressions()->where('progress', 100)->exists();
-    })->count();
-
-    return ($completedSteps / $totalSteps) * 100;
-}
-  
+   
 }
